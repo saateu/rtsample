@@ -1,53 +1,52 @@
 #include "RtAudio.h"
+#include <stdio.h>
 #include <cstdlib>
-#include <cstring>
-#include <string>
-#include <map>
+
+struct OutputData {
+  FILE *fp;
+  unsigned int channels;
+};
+
+int output (void *outputbuffer, void *inputbuffer,
+  unsigned int nBufferFrames, double streamTime, 
+  RtAudioStreamStatus status, void *data)
+{
+  std::cout << "output" << std::endl;
+}
 
 int main (int argc, char *argv[]) {
-  RtAudio ra;
-  RtAudio::DeviceInfo info;
-  unsigned int devnum;
-  const char *api = NULL;
+  RtAudio ra(RtAudio::LINUX_PULSE);
+  unsigned int srate;
+  unsigned int bufferframes;
+  RtAudio::StreamParameters oParam;
+  OutputData data;
 
-  if (!argv[1]) {
-    std::cout << "No API, exit\n";
-    exit (0);
+  if (argc < 2) {
+    std::cout << "No input file\n";
+    exit (1);
   }
 
-  std::vector< RtAudio::Api > apis;
-  RtAudio :: getCompiledApi( apis );
-
-  std::map<int, std::string> apiMap;
-  apiMap[RtAudio::MACOSX_CORE] = "OS-X Core Audio";
-  apiMap[RtAudio::WINDOWS_ASIO] = "Windows ASIO";
-  apiMap[RtAudio::WINDOWS_DS] = "Windows DirectSound";
-  apiMap[RtAudio::WINDOWS_WASAPI] = "Windows WASAPI";
-  apiMap[RtAudio::UNIX_JACK] = "Jack Client";
-  apiMap[RtAudio::LINUX_ALSA] = "Linux ALSA";
-  apiMap[RtAudio::LINUX_PULSE] = "Linux PulseAudio";
-  apiMap[RtAudio::LINUX_OSS] = "Linux OSS";
-  apiMap[RtAudio::RTAUDIO_DUMMY] = "RtAudio Dummy";
-
-  std::cout << "\nCurrent API: " << apiMap[ra.getCurrentApi() ] << std::endl;
-
-  for ( unsigned int i = 0; i<apis.size(); i++ )
-    std::cout << "  " << apiMap[ apis[i] ] << std::endl;
-
-  devnum = ra.getDeviceCount();
-  if (!devnum) {
-    std::cout << "No audio devices found\n" << std::endl;
-    exit (0);
+  data.fp = fopen (argv[1], "rb");
+  if ( !data.fp ) {
+    std::cout << "Unable to find or open file\n";
+    exit (1);
   }
 
-  for (unsigned int i = 0; i < devnum; i++) {
-    info = ra.getDeviceInfo(i);
-    if (strcmp (info.name.c_str(), argv[1]) == 0)
-      api = info.name.c_str();
-      std::cout << "Using" << api << std::endl;
-  }
+  /* default*/
+  srate = 44100;
+  bufferframes = 256;
+  oParam.deviceId = 0;
+  oParam.nChannels = 2;
 
-  if (!api) {
-    std::cout << "Can't use " << argv[1] <<std::endl;
+  try {
+    ra.openStream (&oParam, NULL, RTAUDIO_SINT16, srate, &bufferframes, &output, &data);
+    ra.startStream ();
   }
+  catch (RtAudioError& e) {
+    std::cout << '\n' << e.getMessage() << '\n' << std::endl;
+    goto cleanup;
+  } 
+
+cleanup:
+  ra.closeStream ();
 }
